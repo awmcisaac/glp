@@ -60,7 +60,6 @@ class VAWDataset(Dataset):
                  split: t.Literal["train", "val", "test"],
                  normalize: bool = True,
                  resize: t.Optional[int] = None,
-                 bbox_crop: bool = True,
                  device="cuda:0"):
         self.img_dir = img_dir
         with open(annotations_file, "r") as f:
@@ -83,7 +82,6 @@ class VAWDataset(Dataset):
         self.split = split
         self.normalize = normalize
         self.resize = resize
-        self.bbox_crop = bbox_crop
 
         self.augmentations = []
         self.augmentations.append(T.ToTensor())
