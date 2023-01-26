@@ -64,8 +64,7 @@ class VAWDataset(Dataset):
                  attrib_types: os.path,
                  img_dir: os.path,
                  split: t.Literal["train", "val", "test"],
-                 resize: int = 224,
-                 device="cuda:0"):
+                 resize: int = 224):
         self.img_dir = img_dir
         with open(annotations_file, "r") as f:
             vaw_data = json.load(f)
