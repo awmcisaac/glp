@@ -50,20 +50,34 @@ class Model(torch.nn.Module):
 
         _ = self.model_resnet(img)
 
+        with torch.no_grad():
+            layer2 = self._features['layer2'].clone()
+            layer3 = self._features['layer3'].clone()
+
         img = self.model_resnet(img)
         word_emb = self.f_gate(word_emb)
 
         # channel like product of fgate anf fimg
-        combination = torch.mul(img, word_emb.unsqueeze(dim=-1).unsqueeze(dim=-1))  # torch.Size([1, 2048, 1, 2048])
+        combination = torch.mul(img, word_emb)  # torch.Size([1, 2048])
 
         # concatenation of penultimate layer of Resnet and result of the compound module
-        #### TO DO Check torch.cat()
-        concatenation = torch.cat((self._features['layer2'], self._features['layer3'], combination))
+        low_features = torch.cat((layer2, layer3.resize_(layer2.size())), dim=1)  # torch.Size([1, 1024, 28, 28])
+        concatenation = torch.cat((low_features.resize_(combination.size()), combination), dim=1)
 
-        output = torch.sigmoid(self.classification(concatenation))
+        output = torch.sigmoid(self.classifier(concatenation))
 
         return output
 
 
 if __name__ == "__main__":
-    print()
+
+    # shape is (batch, C, H, W)
+    img = torch.rand(1, 3, 224, 224)
+    # img = torch.rand(1,3,512,812)
+
+    # shape is (batch, dim)
+    # 100d for pretrained GloVe embeddings
+    word = torch.rand(1, 100)
+
+    model = Model()
+    out = model(img, word)
