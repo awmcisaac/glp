@@ -17,8 +17,12 @@ class Trainer:
         Loss function criterion.
     optimizer : torch.optim
         Optimizer to perform the parameters update.
-    type_index_attribute_index_path :
-        Path to a dict with attribute types index as key and lists of attributes as values.
+    attribute_index_path :
+        Path to dict with attributes as keys and indices as values.
+    type_index_path :
+        Path to dict with types as keys and indices as values.
+    attribute_types_full_path :
+        Path to dict with attributes as keys and types as values.
 
     """
     def __init__(
@@ -27,16 +31,27 @@ class Trainer:
         criterion, 
         optimizer,
         device=None,
-        type_index_attribute_index_path: os.path = "data/type_index_attribute_index.json"
+        attribute_index_path: os.path = "data/attribute_index.json",
+        type_index_path: os.path = "data/type_index.json",
+        attribute_types_full_path: os.path = "data/attribute_types_full.json"
     ):
         self.model = model
         self.criterion = criterion
         self.optimizer = optimizer
         self.device = self._get_device(device)
     
-        with open(type_index_attribute_index_path, "w") as f:
-            type_index_attribute_index = json.load(f)
-        self.type_index_attribute_index = type_index_attribute_index
+        with open(attribute_index_path) as f:
+            attribute_index = json.load(f)
+        with open(type_index_path) as f:
+            type_index = json.load(f)
+        with open(attribute_types_full_path) as f:
+            attribute_types_full = json.load(f)
+
+        # dict with key = type_id : value = list of attrib_ids 
+        type2attrib = {i : [] for i in range(8)}
+        for attribute in attribute_types_full:
+            type2attrib[type_index[attribute_types_full[attribute]]].append(attribute_index[attribute])
+        self.type2attrib = type2attrib
         
         # send model to device
         self.model.to(self.device)
@@ -102,14 +117,18 @@ class Trainer:
             
             # parameters update
             self.optimizer.step()
-            for type in range(8):
-                predicted = torch.gather(input=out, dim=1, index=torch.LongTensor([self.type_index_attribute_index[type]]*inputs.shape[0])).round() # prediction round to 1 (positive) or 0 (negative, missing)
-                samples_by_class[type] += len(self.type_index_attribute_index[type])*inputs.shape[0]
-                cumulative_acc_by_class[type] += predicted.eq(torch.gather(input=targets, dim=1, index=torch.LongTensor([self.type_index_attribute_index[type]]*inputs.shape[0])).round()).sum().item()
 
+            # n samples and cumulative accuracy by class 
+            for type in range(8):
+                predicted = torch.gather(input=out, dim=1, index=torch.LongTensor([self.type2attrib[type]]*inputs.shape[0])).round() # prediction round to 1 (positive) or 0 (negative, missing)
+                samples_by_class[type] += len(self.type2attrib[type])*inputs.shape[0]
+                cumulative_acc_by_class[type] += predicted.eq(torch.gather(input=targets, dim=1, index=torch.LongTensor([self.type2attrib[type]]*inputs.shape[0])).round()).sum().item()
+
+            # n samples and cumulative loss
             samples += inputs.shape[0]
             cumulative_loss += loss.item()
 
+            # train loss and train mean accuracy across classes
             train_loss = cumulative_loss/samples
             train_mean_accuracy = torch.mean(torch.tensor(list(cumulative_acc_by_class.values())) / torch.tensor(list(samples_by_class.values()))*100).item()
 
@@ -138,14 +157,17 @@ class Trainer:
                 out = self.model(inputs)
                 loss = self._compute_loss(out, targets)
 
+                # n samples and cumulative accuracy by class
                 for type in range(8):
-                    predicted = torch.gather(input=out, dim=1, index=torch.LongTensor([self.type_index_attribute_index[type]]*inputs.shape[0])).round() # prediction round to 1 (positive) or 0 (negative, missing)
-                    samples_by_class[type] += len(self.type_index_attribute_index[type])*inputs.shape[0]
-                    cumulative_acc_by_class[type] += predicted.eq(torch.gather(input=targets, dim=1, index=torch.LongTensor([self.type_index_attribute_index[type]]*inputs.shape[0])).round()).sum().item()
+                    predicted = torch.gather(input=out, dim=1, index=torch.LongTensor([self.type2attrib[type]]*inputs.shape[0])).round() # prediction round to 1 (positive) or 0 (negative, missing)
+                    samples_by_class[type] += len(self.type2attrib[type])*inputs.shape[0]
+                    cumulative_acc_by_class[type] += predicted.eq(torch.gather(input=targets, dim=1, index=torch.LongTensor([self.type2attrib[type]]*inputs.shape[0])).round()).sum().item()
 
+                # n samples and cumulative loss
                 samples += inputs.shape[0]
                 cumulative_loss += loss.item()
-
+                
+                # val loss and val mean accuracy across classes
                 val_loss = cumulative_loss/samples
                 val_mean_accuracy = torch.mean(torch.tensor(list(cumulative_acc_by_class.values())) / torch.tensor(list(samples_by_class.values()))*100).item()
 
