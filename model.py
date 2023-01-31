@@ -60,7 +60,7 @@ class Model(torch.nn.Module):
         # channel like product of fgate anf fimg
         combination = torch.mul(img, word_emb)  # torch.Size([1, 2048])
 
-        # concatenation of penultimate layer of Resnet and result of the compound module
+        # channel wise concatenation of penultimate layer of Resnet and result of the compound module
         low_features = torch.cat((layer2, layer3.resize_(layer2.size())), dim=1)  # torch.Size([1, 1024, 28, 28])
         concatenation = torch.cat((low_features.resize_(combination.size()), combination), dim=1)
 
