@@ -13,7 +13,7 @@ class Model(torch.nn.Module):
         super(Model, self).__init__()
         self.device = device
 
-        # ResNel backbone
+        # ResNet backbone
         self.model_resnet = resnet50(weights=ResNet50_Weights.DEFAULT)  # Initializing ResNet50 by pytorch
         self.model_resnet.fc = torch.nn.Identity()  # Replace the fully connected layer with an identity
 
@@ -63,8 +63,7 @@ class Model(torch.nn.Module):
         # channel like product of fgate anf fimg
         combination = torch.mul(img, word_emb)  # torch.Size([1, 2048])
 
-        # concatenation of penultimate layer of Resnet and result of the compound module
-        layer3 = torch.nn.AdaptiveAvgPool2d(1)(layer3)
+        # channel-wise concatenation of penultimate layer of Resnet and result of the compound module
 #        low_features = torch.cat((layer2, layer3.resize_(layer2.size())), dim=1).to(self.device)  # torch.Size([1, 1024, 28, 28])
         concatenation = torch.cat(
             (self.adaptive_avg_pool(layer2).squeeze(3).squeeze(2),
@@ -88,5 +87,5 @@ if __name__ == "__main__":
     # 100d for pretrained GloVe embeddings
     word = torch.rand(1, 100)
 
-    model = Model()
+    model = Model(device="cpu")
     out = model(img, word)
