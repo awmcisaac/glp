@@ -39,7 +39,7 @@ def get_test_general(objects_num):
     return obj
 
 
-def get_data(count, instance_id, test=None, val=None):
+def get_data(count, instance_id, test=[], val=[]):
     ele_num = 0
     dataset = []
     if test:
@@ -95,8 +95,8 @@ if __name__ == "__main__":
 
     # Random Sample Training, Validation and Test Data
     test_keys = get_data(test_key_count, instance_id, test=generalization_id)
-    val_keys = get_data(val_key_count, instance_id, test=test_keys)
-    train_keys = get_data(train_key_count, instance_id, test=test_keys, val=val_keys)
+    val_keys = get_data(val_key_count, instance_id, val=test_keys)
+    train_keys = get_data(train_key_count, instance_id, val=val_keys+test_keys)
 
     # Creation of .json files
     test_final_json = [i for i in whole_data if i['instance_id'] in test_keys]
