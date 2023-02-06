@@ -58,8 +58,8 @@ if __name__ == "__main__":
     random.seed(42)
     current_path()
 
-    file_list = ['attribute_index', 'attribute_parent_types', 'attribute_types', 'test', 'train_part1',
-                 'train_part2', 'val']
+    file_list = ['attribute_index', 'attribute_parent_types', 'attribute_types', 'test',
+                 'train_part1', 'train_part2', 'val']
 
     for i in file_list:
         exec("%s = %s" % (i, open_files(i)))
