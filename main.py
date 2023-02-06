@@ -1,4 +1,4 @@
-from dataset import VAWDataset
+from dataset import VAWDataset, VAWSoftLabelDataset
 from trainer import Trainer
 from model import Model
 from glove import GloVeEmbedding
@@ -12,29 +12,33 @@ import json
 
 def main(args, config):
     torch.manual_seed(42)
-    train_dataset = VAWDataset(
+    dataset = VAWSoftLabelDataset if args.model_type == "soft_labels" else VAWDataset
+    train_dataset = dataset(
         annotations_file=config["train_annotations"],
         attrib_idx_file=config["attrib_idx_file"],
         attrib_parent_types=config["attrib_parent_types"],
         attrib_types=config["attrib_types"],
+        attrib_weights=config["attrib_weights"],
         img_dir=config["img_dir"],
         split="train",
         resize=224
     )
-    val_dataset = VAWDataset(
+    val_dataset = dataset(
         annotations_file=config["val_annotations"],
         attrib_idx_file=config["attrib_idx_file"],
         attrib_parent_types=config["attrib_parent_types"],
         attrib_types=config["attrib_types"],
+        attrib_weights=config["attrib_weights"],
         img_dir=config["img_dir"],
         split="val",
         resize=224
     )
-    test_dataset = VAWDataset(
+    test_dataset = dataset(
         annotations_file=config["test_annotations"],
         attrib_idx_file=config["attrib_idx_file"],
         attrib_parent_types=config["attrib_parent_types"],
         attrib_types=config["attrib_types"],
+        attrib_weights=config["attrib_weights"],
         img_dir=config["img_dir"],
         split="test",
         resize=224
@@ -69,9 +73,6 @@ def main(args, config):
     loss_neg_weights = torch.load(config["loss_neg_weights"]).to(args.device)
 
     model = Model(args.device)
-    loss = nn.BCEWithLogitsLoss(weight=loss_weights, pos_weight=loss_pos_weights)
-    #loss = nn.BCEWithLogitsLoss(pos_weight=loss_pos_weights)
-#    optimizer = torch.optim.Adam(model.parameters(), lr=1e-5, weight_decay=1e-5)
     optimizer = torch.optim.Adam([
         {"params": model.model_resnet.parameters(), "lr": 1e-5},
         {"params": model.f_gate.parameters()},
@@ -95,9 +96,9 @@ def main(args, config):
 
     trainer = Trainer(
         model, 
-        loss, 
         optimizer, 
         scheduler,
+        args.model_type,
         config,
         glove_embeddings=glove_embeddings,
         loss_weights=config["loss_weights"],
@@ -121,6 +122,8 @@ if __name__ == "__main__":
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     parser.add_argument("--device", type=str, default=device)
     parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--model_type", type=str, default="default",
+        choices=["default", "soft_labels", "kd"])
     
     args = parser.parse_args()
     with open(args.config_file, "r") as f:

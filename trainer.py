@@ -17,8 +17,6 @@ class Trainer:
     ----------
     model : torch.Module
         The model to train.
-    criterion : torch.Module
-        Loss function criterion.
     optimizer : torch.optim
         Optimizer to perform the parameters update.
     attribute_index_path :
@@ -32,9 +30,9 @@ class Trainer:
     def __init__(
         self, 
         model, 
-        criterion, 
         optimizer,
         scheduler,
+        model_type,
         config,
         glove_embeddings,
         loss_weights,
@@ -46,9 +44,9 @@ class Trainer:
         attribute_types_full_path: os.path = "data/attribute_types_full.json"
     ):
         self.model = model.to(device)
-        self.criterion = criterion
         self.optimizer = optimizer
         self.scheduler = scheduler
+        self.model_type = model_type
         self.config = config
         self.glove_embeddings = glove_embeddings
         self.loss_weights = torch.load(loss_weights).to(device)
@@ -103,7 +101,7 @@ class Trainer:
             # save best
             if val_map > best_val_map:
                 best_val_map = val_map
-                torch.save(self.model.state_dict(), f"models/model.pt")
+                torch.save(self.model.state_dict(), f"models/{self.model_type}_model.pt")
                 print(f"New best model! Saved with mAP {best_val_map}")
             
             print('[{:d}/{:d}]\t loss/train: {:.5f}\t \
@@ -145,7 +143,7 @@ class Trainer:
             out = self.model(batch["image"], object_embeddings)
             
             # loss
-            loss = self._compute_loss(out, batch["attributes_label"])
+            loss = self._compute_loss(out, targets)
             
             # remove gradient from previous passes
             self.optimizer.zero_grad()
@@ -244,7 +242,6 @@ class Trainer:
 
         # vaw_dataset evaluator
         full_targets = torch.concat(full_targets, dim=0)
-        # TODO: change for soft-labels
         full_targets = torch.where(full_targets==-1, 2, full_targets)
         self.evaluator = Evaluator(
             fpath_attr2idx=self.config["attrib_idx_file"],
@@ -258,46 +255,10 @@ class Trainer:
             gt_label=full_targets,
             threshold_type="topk"
         )
-#        CATEGORIES = ['all', 'head', 'medium', 'tail'] + \
-#            list(self.evaluator.attribute_parent_type.keys())
-#
-#        for category in CATEGORIES:
-#            print(f"----------{category.upper()}----------")
-#            print(f"mAP: {scores_per_class[category]['ap']:.4f}")
-#
-#            print("Per-class (top 15):")
-#            for metric in ['recall', 'precision', 'f1', 'bacc']:
-#                if metric in scores_per_class[category]:
-#                    print(f"- {metric}: {scores_per_class[category][metric]:.4f}")
-#
-#            print("Overall (top 15):")
-#            for metric in ['recall', 'precision', 'f1']:
-#                if metric in scores_overall[category]:
-#                    print(f"- {metric}: {scores_overall[category][metric]:.4f}")
-#        with open('detailed_output.txt', 'w') as f:
-#            f.write('| {:<18}| AP\t\t| Recall@K\t| B.Accuracy\t| N_Pos\t| N_Neg\t|\n'.format('Name'))
-#            f.write('-----------------------------------------------------------------------------------------------------\n')
-#            for i_class in range(self.evaluator.n_class):
-#                att = self.evaluator.idx2attr[i_class]
-#                f.write('| {:<18}| {:.4f}\t| {:.4f}\t| {:.4f}\t\t| {:<6}| {:<6}|\n'.format(
-#                    att,
-#                    self.evaluator.get_score_class(i_class).ap,
-#                    self.evaluator.get_score_class(i_class, threshold_type='topk').get_recall(),
-#                    self.evaluator.get_score_class(i_class).get_bacc(),
-#                    self.evaluator.get_score_class(i_class).n_pos,
-#                    self.evaluator.get_score_class(i_class).n_neg))
-#        ap_list = []
-#        for i_class in range(self.evaluator.n_class):
-#            att = self.evaluator.idx2attr[i_class]
-#            ap_list.append(self.evaluator.get_score_class(i_class).ap)
-#        val_map = sum(ap_list) / len(ap_list))
         val_map = np.mean(
             [att.ap for att in 
              map(self.evaluator.get_score_class, range(self.evaluator.n_class))
             ])
-
-#        print(scores_overall)
-#        print(scores_per_class)
 
         # val loss and val mean accuracy across classes
         val_loss = cumulative_loss / samples
@@ -305,9 +266,9 @@ class Trainer:
 
         return val_loss, val_mean_accuracy, val_map
 
-    def test(self, test_loader):
+    def test(self, loader):
         print("Running test inference with best validation model")
-        self.model.load_state_dict(torch.load('models/model.pt'))
+        self.model.load_state_dict(torch.load(f"models/{self.model_type}_model.pt"))
         self.model.eval()
 
         with torch.no_grad():
@@ -330,7 +291,6 @@ class Trainer:
 
         # vaw_dataset evaluator
         full_targets = torch.concat(full_targets, dim=0)
-        # TODO: change for soft-labels
         full_targets = torch.where(full_targets==-1, 2, full_targets)
         self.evaluator = Evaluator(
             fpath_attr2idx=self.config["attrib_idx_file"],
@@ -349,46 +309,27 @@ class Trainer:
              map(self.evaluator.get_score_class, range(self.evaluator.n_class))
             ])
 
-        np.save(f"eval/test_preds_{test_map}.npy", torch.concat(full_predictions, dim=0).cpu().numpy())
-        np.save(f"eval/test_gt_{test_map}.npy", full_targets.cpu().numpy())
-        print(f"Saved test predictions and GTs to eval/test_(preds/gt)_{test_map}.npy")
+        torch.save(torch.concat(full_predictions, dim=0), f"eval/{self.model_type}_test_preds_{test_map}.pt")
+        torch.save(full_targets, f"eval/{self.model_type}_test_gt_{test_map}.pt")
+        print(f"Saved test predictions and GTs to eval/test_(preds/gt)_{test_map}.pt")
 
         return test_map
 
-#    def _compute_metrics(self, cache, classes, topk=15):
-#        sum_vals = {k: sum(v) for k, v in cache.items()}
-#        gts = torch.cat(cache["gt"], dim=0)
-#        preds = torch.cat(cache["preds"], dim=0)
-#        mAP = self.calculate_mAP(preds, gts)
-#        PC_Recall = sum(
-#            sum_vals[f"TP_{cls}"] / max(sum_vals[f"P_{cls"], 1e-5) for cls in classes
-#        ) / len(classes)
-#        PC_Precision = sum(
-#            sum_vals[f"TP_{cls}"] / max(sum_vals[f"PP_{cls"], 1e-5) for cls in classes
-#        ) / len(classes)
-#        OV_Recall = sum(sum_vals[f"TP_{cls}"] for cls in classes) / sum(
-#            sum_vals[f"P_{cls}"] for cls in classes
-#        )
-#        OV_Precision = sum(sum_vals[f"TP_{cls}"] for cls in classes) / sum(
-#            sum_vals[f"PP_{cls}"] for cls in classes
-#        )
-#        OV_F1 = 2 * OV_Recall * OV_Precision / max(OV_Recall + OV_Precision, 1e-5)
-#        PC_F1 = 2 * PC_Recall * PC_Precision / max(PC_Recall + PC_Precision, 1e-5)
-    
     def _compute_loss(self, real, target):
         # get indices of unlabeled attributes
         weights = torch.where(target==-1., 0.05*self.loss_weights, 1.*self.loss_weights)
-        # weights = torch.where(target==-1., 0.05, 1.)
-        # TODO: change for soft-labels
-        target = torch.where(target==-1., 0., target)
-#        loss = F.binary_cross_entropy_with_logits(real, target, weight=weights)
+        # missing labels have small target probability assigned with soft labels, 0 otherwise
+        if self.model_type == "soft_labels":
+            target = torch.where(target==-1., 0.05, target)
+        else:
+            target = torch.where(target==-1., 0., target)
 
         # have to do this manually to also include negative weights
         max_val = (-real).clamp_min(0)
         log_pos_weight = self.loss_pos_weights.mul(target)
         log_neg_weight = self.loss_neg_weights.mul(1 - target)
         log_weight = log_pos_weight + log_neg_weight
-        # this kind of works. not sure about stability though
+        # this kind of works. not sure about stability though, maybe max_val required
         loss = (1 - target).mul(real).add(((-real).exp().add(1)).log()).mul(log_weight)
 
         loss = loss * self.loss_weights

@@ -60,8 +60,9 @@ class VAWDataset(Dataset):
     def __init__(self,
                  annotations_file: os.path,
                  attrib_idx_file: os.path,
-                 attrib_parent_types: os.path,  # TODO: Make config file for these
+                 attrib_parent_types: os.path,
                  attrib_types: os.path,
+                 attrib_weights: os.path,
                  img_dir: os.path,
                  split: t.Literal["train", "val", "test"],
                  resize: int = 224):
@@ -90,6 +91,8 @@ class VAWDataset(Dataset):
                     self.parent2attrib[par].extend(self.type2attrib[t])
                 except KeyError:
                     pass
+        with open(attrib_weights, "r") as f:
+            self.attrib_weights = json.load(f)
 
         self.objects = sorted({sample.object_name for sample in self.data})
         self.obj2idx = {key: val for (key, val) in
@@ -119,7 +122,7 @@ class VAWDataset(Dataset):
     def encode_attrs(self, pos_atts: t.List[str], neg_atts: t.List[str]) -> torch.Tensor:
         """
         Encode attribute labels with 1 for positive, 
-        0 for negative, -1 for missing
+        0 for negative, -1 for missing (updated to 0 with low weight in loss function)
         """
         encoding = torch.neg(torch.ones(len(self.att2idx)))
         encoding[[self.att2idx[pos_att] for pos_att in pos_atts]] = 1
@@ -183,12 +186,50 @@ class VAWDataset(Dataset):
     def num_categories(self):
         return len(self.att2idx)
 
+class VAWSoftLabelDataset(VAWDataset):
+    def __init__(self,
+                 annotations_file: os.path,
+                 attrib_idx_file: os.path,
+                 attrib_parent_types: os.path,
+                 attrib_types: os.path,
+                 attrib_weights: os.path,
+                 img_dir: os.path,
+                 split: t.Literal["train", "val", "test"],
+                 resize: int = 224):
+        super(VAWSoftLabelDataset, self).__init__(
+            annotations_file, attrib_idx_file, attrib_parent_types,
+            attrib_types, attrib_weights, img_dir, split, resize)
+
+    def encode_attrs(self, pos_atts: t.List[str], neg_atts: t.List[str]) -> torch.Tensor:
+        """
+        Encode attribute labels with 1 for positive, 
+        0 for negative, -1 for missing (updated to 0.05 in loss function)
+        """
+        encoding = torch.neg(torch.ones(len(self.att2idx)))
+        for pos_att in pos_atts:
+            encoding[self.att2idx[pos_att]] = 1 * self.attrib_weights[pos_att]
+        encoding[[self.att2idx[neg_att] for neg_att in neg_atts]] = 0
+        encoding[encoding == -1] = 0.05 
+        return encoding
+
+    def decode_attrs(self, encoding: torch.Tensor) -> t.Dict[str, t.List[str]]:
+        """
+        Decode Tensor into positive and negative attribute label lists
+        """
+        pos_atts = [self.idx2att[int(idx)]
+                    for idx in (encoding > 0.05).nonzero(as_tuple=True)[0]
+                   ]
+        neg_atts = [self.idx2att[int(idx)]
+                    for idx in (encoding == 0).nonzero(as_tuple=True)[0]
+                   ]
+        return {"positive_attributes": pos_atts, "negative_attributes": neg_atts}
 
 if __name__ == "__main__":
     dataset = VAWDataset(annotations_file="data/test.json",
                          attrib_idx_file="data/attribute_index.json",
                          attrib_parent_types="data/attribute_parent_types.json",
                          attrib_types="data/attribute_types.json",
+                         attrib_weights="data/attribute_weights.json",
                          img_dir="VG_100K",
                          split="test",
                          resize=224)

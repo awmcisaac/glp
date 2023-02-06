@@ -7,6 +7,7 @@
 	"attrib_parent_types": "data/attribute_parent_types.json",
 	"attrib_types": "data/attribute_types.json",
 	"attrib_types_full": "data/attribute_types_full.json",
+    "attrib_weights": "data/attribute_weights.json",
 	"attrib_head_tail": "data/head_tail.json",
 	"img_dir": "VG_100K",
 	"loss_weights": "data/loss_weights.pt",
