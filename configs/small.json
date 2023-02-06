@@ -1,0 +1,16 @@
+{
+	"train_annotations": "data/train_data.json",
+	"val_annotations": "data/val_data.json",
+	"test_annotations": "data/test_data.json",
+	"attrib_idx_file": "data/attribute_index.json",
+	"type_idx_file": "data/type_index.json",
+	"attrib_parent_types": "data/attribute_parent_types.json",
+	"attrib_types": "data/attribute_types.json",
+	"attrib_types_full": "data/attribute_types_full.json",
+	"attrib_head_tail": "data/head_tail.json",
+	"img_dir": "VG_100K",
+	"loss_weights": "data/loss_weights.pt",
+	"loss_pos_weights": "data/loss_pos_weights.pt",
+	"loss_neg_weights": "data/loss_neg_weights.pt",
+    "glove_embedding_file": "data/glove.6B.100d.txt"
+}
