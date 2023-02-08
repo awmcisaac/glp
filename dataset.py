@@ -209,7 +209,6 @@ class VAWSoftLabelDataset(VAWDataset):
         for pos_att in pos_atts:
             encoding[self.att2idx[pos_att]] = 1 * self.attrib_weights[pos_att]
         encoding[[self.att2idx[neg_att] for neg_att in neg_atts]] = 0
-        encoding[encoding == -1] = 0.05 
         return encoding
 
     def decode_attrs(self, encoding: torch.Tensor) -> t.Dict[str, t.List[str]]:

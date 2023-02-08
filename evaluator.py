@@ -106,7 +106,7 @@ class Evaluator(object):
                           Determines positive vs. negative prediction.
         """
         self.pred = pred.cpu().numpy()
-        self.gt_label = gt_label.cpu().numpy()
+        self.gt_label = gt_label.cpu().numpy().round().astype(np.int32)
         self.n_instance = self.gt_label.shape[0]
 
         # For topK metrics, we keep a version of the prediction matrix that sets
@@ -198,7 +198,7 @@ class Evaluator(object):
             # assert False, f"0 labeled instances for attribute {self.idx2attr[i_class]}"
             pass
         else:
-            # Select ony the labeled ones.
+            # Select only the labeled ones.
             pred = pred[mask_labeled]
             gt_label = gt_label[mask_labeled]
 
