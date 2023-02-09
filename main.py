@@ -1,6 +1,6 @@
 from dataset import VAWDataset, VAWSoftLabelDataset
 from trainer import Trainer
-from model import Model
+from model import Model, KDModel
 from glove import GloVeEmbedding
 from evaluator import Evaluator
 
@@ -72,7 +72,8 @@ def main(args, config):
     loss_pos_weights = torch.load(config["loss_pos_weights"]).to(args.device)
     loss_neg_weights = torch.load(config["loss_neg_weights"]).to(args.device)
 
-    model = Model(args.device)
+    model = KDModel(torch.load(config["teacher_model_weights"]), args.device) \
+            if args.model_type == "kd" else Model(args.device)
     optimizer = torch.optim.Adam([
         {"params": model.model_resnet.parameters(), "lr": 1e-5},
         {"params": model.f_gate.parameters()},

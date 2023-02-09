@@ -139,11 +139,17 @@ class Trainer:
             targets = batch["attributes_label"]
             
             object_embeddings = self.glove_embeddings(batch["object_name"]).to(self.device)
-            # forward pass
-            out = self.model(batch["image"], object_embeddings)
-            
-            # loss
-            loss = self._compute_loss(out, targets)
+            if self.model_type == "kd":
+                teacher_logits, student_logits = self.model(batch["image"],
+                                                            object_embeddings)
+                loss_student = self._compute_loss(student_logits, targets)
+                loss_distill = self._compute_kd_loss(student_logits, teacher_logits)
+                loss = loss_student + loss_distill
+            else:
+                # forward pass
+                out = self.model(batch["image"], object_embeddings)
+                # loss
+                loss = self._compute_loss(out, targets)
             
             # remove gradient from previous passes
             self.optimizer.zero_grad()
@@ -154,25 +160,25 @@ class Trainer:
             # parameters update
             self.optimizer.step()
 
-            # n samples and cumulative accuracy by class 
-            for typ in range(8):
-                predicted = torch.gather(
-                    input=torch.sigmoid(out), 
-                    dim=1, 
-                    index=torch.LongTensor(
-                        [self.type2attrib[typ]]*inputs.shape[0]
-                    ).to(self.device)
-                ).round() # round to 1 (positive) or 0 (negative, missing)
-                samples_by_class[typ] += len(self.type2attrib[typ])*inputs.shape[0]
-                cumulative_acc_by_class[typ] += predicted.eq(
-                    torch.gather(
-                        input=targets, 
-                        dim=1, 
-                        index=torch.LongTensor(
-                            [self.type2attrib[typ]]*inputs.shape[0]
-                        ).to(self.device)
-                    ).round()
-                ).sum().item()
+#            # n samples and cumulative accuracy by class 
+#            for typ in range(8):
+#                predicted = torch.gather(
+#                    input=torch.sigmoid(out), 
+#                    dim=1, 
+#                    index=torch.LongTensor(
+#                        [self.type2attrib[typ]]*inputs.shape[0]
+#                    ).to(self.device)
+#                ).round() # round to 1 (positive) or 0 (negative, missing)
+#                samples_by_class[typ] += len(self.type2attrib[typ])*inputs.shape[0]
+#                cumulative_acc_by_class[typ] += predicted.eq(
+#                    torch.gather(
+#                        input=targets, 
+#                        dim=1, 
+#                        index=torch.LongTensor(
+#                            [self.type2attrib[typ]]*inputs.shape[0]
+#                        ).to(self.device)
+#                    ).round()
+#                ).sum().item()
 
             # n samples and cumulative loss
             samples += inputs.shape[0]
@@ -209,32 +215,40 @@ class Trainer:
                 targets = batch["attributes_label"]
 
                 object_embeddings = self.glove_embeddings(batch["object_name"]).to(self.device)
-                out = self.model(inputs, object_embeddings)
-                sig_out = torch.sigmoid(out)
+                if self.model_type == "kd":
+                    teacher_logits, student_logits = self.model(inputs, object_embeddings)
+                    loss_student = self._compute_loss(student_logits, targets)
+                    loss_distill = self._compute_kd_loss(student_logits, teacher_logits)
+                    loss = loss_student + loss_distill
+                    sig_out = torch.sigmoid(student_logits)
+                else:
+                    out = self.model(inputs, object_embeddings)
+                    loss = self._compute_loss(out, targets)
+                    sig_out = torch.sigmoid(out)
+
                 full_predictions.append(sig_out)
                 full_targets.append(targets)
-                loss = self._compute_loss(out, targets)
 
 
                 # n samples and cumulative accuracy by class
-                for typ in range(8):
-                    predicted = torch.gather(
-                        input=sig_out, 
-                        dim=1, 
-                        index=torch.LongTensor(
-                            [self.type2attrib[typ]]*inputs.shape[0]
-                        ).to(self.device)
-                    ).round() # round to 1 (positive) or 0 (negative, missing)
-                    samples_by_class[typ] += len(self.type2attrib[typ])*inputs.shape[0]
-                    cumulative_acc_by_class[typ] += predicted.eq(
-                        torch.gather(
-                            input=targets, 
-                            dim=1, 
-                            index=torch.LongTensor(
-                                [self.type2attrib[typ]]*inputs.shape[0]
-                            ).to(self.device)
-                        ).round()
-                    ).sum().item()
+#                for typ in range(8):
+#                    predicted = torch.gather(
+#                        input=sig_out, 
+#                        dim=1, 
+#                        index=torch.LongTensor(
+#                            [self.type2attrib[typ]]*inputs.shape[0]
+#                        ).to(self.device)
+#                    ).round() # round to 1 (positive) or 0 (negative, missing)
+#                    samples_by_class[typ] += len(self.type2attrib[typ])*inputs.shape[0]
+#                    cumulative_acc_by_class[typ] += predicted.eq(
+#                        torch.gather(
+#                            input=targets, 
+#                            dim=1, 
+#                            index=torch.LongTensor(
+#                                [self.type2attrib[typ]]*inputs.shape[0]
+#                            ).to(self.device)
+#                        ).round()
+#                    ).sum().item()
 
                 # n samples and cumulative loss
                 samples += inputs.shape[0]
@@ -283,11 +297,15 @@ class Trainer:
                 targets = batch["attributes_label"]
 
                 object_embeddings = self.glove_embeddings(batch["object_name"]).to(self.device)
-                out = self.model(inputs, object_embeddings)
-                sig_out = torch.sigmoid(out)
+                if self.model_type == "kd":
+                    teacher_logits, student_logits = self.model(inputs, object_embeddings)
+                    sig_out = torch.sigmoid(student_logits)
+                else:
+                    out = self.model(inputs, object_embeddings)
+                    sig_out = torch.sigmoid(out)
+
                 full_predictions.append(sig_out)
                 full_targets.append(targets)
-                loss = self._compute_loss(out, targets)
 
         # vaw_dataset evaluator
         full_targets = torch.concat(full_targets, dim=0)
@@ -336,6 +354,14 @@ class Trainer:
         loss = loss.mean()
             
         return loss
+
+    def _compute_kd_loss(self, student, teacher):
+        log_student = F.log_softmax(student, dim=-1)
+        log_teacher = F.log_softmax(teacher, dim=-1)
+        loss = F.kl_div(log_student, log_teacher, reduction="batchmean", log_target=True)
+
+        return loss
+
 
     def _get_device(self, device):
         if device is None:

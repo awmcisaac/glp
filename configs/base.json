@@ -13,5 +13,6 @@
 	"loss_weights": "data/loss_weights.pt",
 	"loss_pos_weights": "data/loss_pos_weights.pt",
 	"loss_neg_weights": "data/loss_neg_weights.pt",
-    "glove_embedding_file": "data/glove.6B.100d.txt"
+    "glove_embedding_file": "data/glove.6B.100d.txt",
+    "teacher_model_weights": "models/default_model.pt"
 }

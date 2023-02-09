@@ -2,6 +2,7 @@ import torch
 from torchvision.models import resnet50, ResNet50_Weights
 from torchvision.models.feature_extraction import create_feature_extractor
 from typing import Callable
+import typing as t
 
 class Model(torch.nn.Module):
 
@@ -61,6 +62,30 @@ class Model(torch.nn.Module):
         output = self.classifier(concatenation)
 
         return output
+
+class KDModel(Model):
+    def __init__(self, teacher_model_weights: t.Dict, device):
+        super(KDModel, self).__init__(device)
+        self.teacher_model = Model(device)
+        self.teacher_model.load_state_dict(teacher_model_weights)
+        self.teacher_model.requires_grad_(False) # don't train
+
+    def forward(self, img, word_emb):
+        teacher_logits = self.teacher_model(img, word_emb)
+
+        img = self.model_resnet(img)
+        word_emb = self.f_gate(word_emb)
+
+        composition = torch.mul(self.adaptive_avg_pool(img['layer4']).squeeze(3).squeeze(2), word_emb)
+        layer2 = self.adaptive_avg_pool(img['layer2']).squeeze(3).squeeze(2)
+        layer3 = self.adaptive_avg_pool(img['layer3']).squeeze(3).squeeze(2)
+        concatenation = torch.cat(
+            [layer2, layer3, composition], dim=1
+        ).to(self.device)
+
+        student_logits = self.classifier(concatenation)
+
+        return teacher_logits, student_logits
 
 
 if __name__ == "__main__":
