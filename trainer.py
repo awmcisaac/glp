@@ -140,14 +140,15 @@ class Trainer:
             
             object_embeddings = self.glove_embeddings(batch["object_name"]).to(self.device)
             if self.model_type == "kd":
-                teacher_logits, student_logits = self.model(batch["image"],
+                teacher_logits, student_logits = self.model(inputs,
                                                             object_embeddings)
                 loss_student = self._compute_loss(student_logits, targets)
-                loss_distill = self._compute_kd_loss(student_logits, teacher_logits)
+                loss_distill = self._compute_kd_loss(
+                    student_logits, teacher_logits, "xent")
                 loss = loss_student + loss_distill
             else:
                 # forward pass
-                out = self.model(batch["image"], object_embeddings)
+                out = self.model(inputs, object_embeddings)
                 # loss
                 loss = self._compute_loss(out, targets)
             
@@ -218,7 +219,8 @@ class Trainer:
                 if self.model_type == "kd":
                     teacher_logits, student_logits = self.model(inputs, object_embeddings)
                     loss_student = self._compute_loss(student_logits, targets)
-                    loss_distill = self._compute_kd_loss(student_logits, teacher_logits)
+                    loss_distill = self._compute_kd_loss(
+                        student_logits, teacher_logits, "xent")
                     loss = loss_student + loss_distill
                     sig_out = torch.sigmoid(student_logits)
                 else:
@@ -355,10 +357,14 @@ class Trainer:
             
         return loss
 
-    def _compute_kd_loss(self, student, teacher):
-        log_student = F.log_softmax(student, dim=-1)
-        log_teacher = F.log_softmax(teacher, dim=-1)
-        loss = F.kl_div(log_student, log_teacher, reduction="batchmean", log_target=True)
+    def _compute_kd_loss(self, student, teacher, loss_type):
+        if loss_type == "kl_div":
+            log_student = F.log_softmax(student, dim=-1)
+            log_teacher = F.log_softmax(teacher, dim=-1)
+            loss = F.kl_div(log_student, log_teacher, reduction="batchmean", log_target=True)
+        else: # cross entropy
+            softmax_teacher = F.softmax(teacher, dim=-1)
+            loss = F.cross_entropy(student, softmax_teacher)
 
         return loss
 
