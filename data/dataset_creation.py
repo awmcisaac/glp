@@ -102,6 +102,7 @@ if __name__ == "__main__":
     test_final_json = [i for i in whole_data if i['instance_id'] in test_keys]
     val_final_json = [i for i in whole_data if i['instance_id'] in val_keys]
     train_final_json = [i for i in whole_data if i['instance_id'] in train_keys]
+    gen_final_json = [i for i in whole_data if i['instance_id'] in generalization_id]
 
     with open('test_data.json', 'w') as outfile:
         json.dump(test_final_json, outfile)
@@ -111,3 +112,6 @@ if __name__ == "__main__":
 
     with open('train_data.json', 'w') as outfile:
         json.dump(train_final_json, outfile)
+
+    with open('generalization_data.json', 'w') as outfile:
+        json.dump(gen_final_json, outfile)
