@@ -21,7 +21,11 @@ To create our filtered splits, run the dataset creation script as follows from t
 python dataset_creation.py
 ```
 
-The script creates four JSON inside `data`: `train_data.json`, `val_data.json`, `test_data.json`, `generalization_data.json`. `generalization_data.json` cotaines only the subset of the test split with approximately 35% of novel objects.
+The script creates four JSON inside `data`: 
+
+`train_data.json`, `val_data.json`, `test_data.json`, `generalization_data.json`. 
+
+`generalization_data.json` cotaines only the subset of the test split with approximately 35% of novel objects.
 
 
 
@@ -44,7 +48,7 @@ In particular, `eval.py` expects as input the followings:
    (shape `(n_instances, n_class)`). `preds[i,j]` is the predicted probability 
    for attribute class `j` of instance `i`.
 2. `fpath_label`: path to the groundtruth label tensor `{default, kd, kd_xent, soft_labels}_test_gt.pt` (shape `(n_instances, n_class)`).
-   The groundtruth labels are different based on the model type: *hard labels* for `{default, kd, kd_xent}`, and *soft labels* for `soft_labels`. `gt_label[i,j]` the ground truth label for attribute class `j` of instance `i`.
+   The groundtruth labels are different based on the model type: *hard labels* for `{default, kd, kd_xent}`, and *soft labels* for `soft_labels`. `gt_label[i,j]` is the ground truth label for attribute class `j` of instance `i`.
 
 From the `eval` folder, run the evaluation script as follows (default model evaluation):
 ```
